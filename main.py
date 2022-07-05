@@ -1,7 +1,3 @@
-"""
-2:45 can maintainance - syncronising and updateing mongo tables
-"""
-
 import datetime
 import logging
 import os
