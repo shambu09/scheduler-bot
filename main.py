@@ -4,6 +4,7 @@
 
 import datetime
 import logging
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Set
@@ -36,6 +37,12 @@ scheduler = BlockingScheduler(executors=executors)
 state = State()
 logger = Logger()
 
+FETCH_HOUR = os.environ.get("EXEC_CRON_HOUR", "*")
+FETCH_MINUTE = os.environ.get("EXEC_CRON_MINUTE", "45")
+
+EXEC_HOUR = os.environ.get("EXEC_CRON_HOUR", "*")
+EXEC_MINUTE = os.environ.get("EXEC_CRON_MINUTE", "*/30")
+
 
 def add_value():
     Job(hour="11", deps=["flask"], code=r"print('hello')", sync=False).save()
@@ -43,9 +50,37 @@ def add_value():
 
 
 @scheduler.scheduled_job(
-    trigger="cron", hour="*", minute="*", second="15", args=[state, logger]
+    trigger="cron",
+    hour=FETCH_HOUR,
+    minute=FETCH_MINUTE,
+    args=[state, logger],
 )
 def fetch_store(state: State, logger: Logger, fetch_all: bool = False) -> State:
+    to_be_deleted_jobs = Job.objects(to_be_deleted=True)
+
+    if len(to_be_deleted_jobs) > 0:
+        logger.root_logger.info(f"To be deleted {len(to_be_deleted_jobs)} jobs")
+        buckets = set()
+        del_ids = set()
+
+        for job in to_be_deleted_jobs:
+            buckets.add(job.hour)
+            del_ids.add(str(job.id))
+
+        for hour in buckets:
+            state.store[hour] = CodeList(
+                filter(lambda code_obj: code_obj.name not in del_ids, state.store[hour])
+            )
+
+        for job in to_be_deleted_jobs:
+            job.delete()
+
+        logger.root_logger.info(
+            "Deleted %s jobs:\n%s\n",
+            str(len(del_ids)),
+            str(del_ids),
+        )
+
     needed_deps = set()
     if fetch_all:
         jobs = Job.objects()
@@ -108,7 +143,10 @@ def run_jobs_of_nth_hour(n: str, state: State) -> Dict[str, str]:
 
 
 @scheduler.scheduled_job(
-    trigger="cron", hour="*", minute="*", second="45", args=[state, logger]
+    trigger="cron",
+    hour=EXEC_HOUR,
+    minute=EXEC_MINUTE,
+    args=[state, logger],
 )
 def execute_jobs(state: State, logger: Logger) -> Dict[str, str]:
     hour = str(datetime.datetime.now().hour)
