@@ -17,3 +17,4 @@ class Job(Document):
     code: str = StringField(required=True)
     name: str = StringField(default="")
     sync: bool = BooleanField(default=False)
+    to_be_deleted: bool = BooleanField(default=False)

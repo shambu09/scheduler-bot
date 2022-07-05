@@ -43,9 +43,38 @@ def add_value():
 
 
 @scheduler.scheduled_job(
-    trigger="cron", hour="*", minute="*", second="15", args=[state, logger]
+    trigger="cron",
+    hour="*",
+    minute="*",
+    second="15",
+    args=[state, logger],
 )
 def fetch_store(state: State, logger: Logger, fetch_all: bool = False) -> State:
+    to_be_deleted_jobs = Job.objects(to_be_deleted=True)
+
+    if len(to_be_deleted_jobs) > 0:
+        logger.root_logger.info(f"To be deleted {len(to_be_deleted_jobs)} jobs")
+        buckets = set()
+        del_ids = set()
+
+        for job in to_be_deleted_jobs:
+            buckets.add(job.hour)
+            del_ids.add(str(job.id))
+
+        for hour in buckets:
+            state.store[hour] = CodeList(
+                filter(lambda code_obj: code_obj.name not in del_ids, state.store[hour])
+            )
+
+        for job in to_be_deleted_jobs:
+            job.delete()
+
+        logger.root_logger.info(
+            "Deleted %s jobs:\n%s\n",
+            str(len(del_ids)),
+            str(del_ids),
+        )
+
     needed_deps = set()
     if fetch_all:
         jobs = Job.objects()
@@ -108,7 +137,11 @@ def run_jobs_of_nth_hour(n: str, state: State) -> Dict[str, str]:
 
 
 @scheduler.scheduled_job(
-    trigger="cron", hour="*", minute="*", second="45", args=[state, logger]
+    trigger="cron",
+    hour="*",
+    minute="*",
+    second="45",
+    args=[state, logger],
 )
 def execute_jobs(state: State, logger: Logger) -> Dict[str, str]:
     hour = str(datetime.datetime.now().hour)
