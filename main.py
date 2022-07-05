@@ -4,6 +4,7 @@
 
 import datetime
 import logging
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Set
@@ -36,6 +37,12 @@ scheduler = BlockingScheduler(executors=executors)
 state = State()
 logger = Logger()
 
+FETCH_HOUR = os.environ.get("EXEC_CRON_HOUR", "*")
+FETCH_MINUTE = os.environ.get("EXEC_CRON_MINUTE", "45")
+
+EXEC_HOUR = os.environ.get("EXEC_CRON_HOUR", "*")
+EXEC_MINUTE = os.environ.get("EXEC_CRON_MINUTE", "*/30")
+
 
 def add_value():
     Job(hour="11", deps=["flask"], code=r"print('hello')", sync=False).save()
@@ -44,9 +51,8 @@ def add_value():
 
 @scheduler.scheduled_job(
     trigger="cron",
-    hour="*",
-    minute="*",
-    second="15",
+    hour=FETCH_HOUR,
+    minute=FETCH_MINUTE,
     args=[state, logger],
 )
 def fetch_store(state: State, logger: Logger, fetch_all: bool = False) -> State:
@@ -138,9 +144,8 @@ def run_jobs_of_nth_hour(n: str, state: State) -> Dict[str, str]:
 
 @scheduler.scheduled_job(
     trigger="cron",
-    hour="*",
-    minute="*",
-    second="45",
+    hour=EXEC_HOUR,
+    minute=EXEC_MINUTE,
     args=[state, logger],
 )
 def execute_jobs(state: State, logger: Logger) -> Dict[str, str]:
