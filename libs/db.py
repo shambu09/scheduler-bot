@@ -1,8 +1,6 @@
 """
 Schema:
-    day
-    hour
-    minute
+    cron
     deps
     code
     name
