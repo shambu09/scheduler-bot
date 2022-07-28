@@ -1,6 +1,9 @@
+import multiprocessing
 import os
 import subprocess
+import threading
 from logging.config import dictConfig
+from time import sleep
 from typing import Iterable, Set
 
 from dotenv import load_dotenv
@@ -98,3 +101,19 @@ def get_deps() -> Set[str]:
     deps = set(filter(lambda x: x != "", deps))
 
     return deps
+
+
+def run_timer():
+    def _run():
+        __t = 0
+        while True:
+            print(__t)
+            sleep(1)
+            __t += 1
+
+    # threading.Thread(target=_run).start()
+    multiprocessing.Process(target=_run).start()
+
+
+if __name__ == "__main__":
+    run_timer()

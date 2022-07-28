@@ -5,34 +5,25 @@ from mongoengine import *
 from libs.db import Job
 from utils import get_URI
 
-jobs = [
-    {
-        "hour": "",
-        "deps": [],
-        "code": "",
-        "name": "",
-    },
-]
-
 # Sample
 # jobs = [
 #     {
-#         "hour": "11",
+#         "cron": {"hour":"11"},
 #         "deps": ["flask"],
 #         "code": f"import flask\nprint('flask')",
 #     },
 #     {
-#         "hour": "11",
+#         "cron": {"hour":"11"},
 #         "deps": ["requests"],
 #         "code": f"import requests\nprint('requests')",
 #     },
 #     {
-#         "hour": "12",
+#         "cron": {"hour":"12"},
 #         "deps": ["Scrapy==2.6.1"],
 #         "code": f"import flask\nprint('Scrapy==2.6.1')",
 #     },
 #     {
-#         "hour": "17",
+#         "cron": {"hour":"13"},
 #         "deps": ["requests"],
 #         "code": f"import requests\nprint('requests')",
 #     },
@@ -50,5 +41,13 @@ def add_jobs(jobs: List[Dict]):
 
 
 if __name__ == "__main__":
+    jobs = [
+        {
+            "cron": {"hour": "*", "minute": "*", "second": "0/5"},
+            "deps": ["Flask==2.1.2"],
+            "code": """import datetime\nimport time\nprint(datetime.datetime.now(), flush=True)\ntime.sleep(10)\nprint(datetime.datetime.now(), flush=True)""",
+        },
+    ]
+
     setup()
     add_jobs(jobs)
