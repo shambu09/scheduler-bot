@@ -7,27 +7,27 @@ from add_jobs import add_jobs
 from libs.code import Code
 from libs.db import Job
 from libs.store import Store
-from main import Logger, State, execute_jobs, fetch_store, run_jobs_of_nth_hour
+from main import CodeJob, Logger, State, cronify, fetch_store
 from utils import get_deps, get_URI, setup_logging
 
 jobs = [
     {
-        "hour": "11",
+        "cron": {"hour": "11"},
         "deps": ["flask"],
         "code": f"import flask\nprint('flask')",
     },
     {
-        "hour": "11",
+        "cron": {"hour": "11"},
         "deps": ["requests"],
         "code": f"import requests\nprint('requests')",
     },
     {
-        "hour": "12",
+        "cron": {"hour": "12"},
         "deps": ["Scrapy==2.6.1"],
         "code": f"import flask\nprint('Scrapy==2.6.1')",
     },
     {
-        "hour": "13",
+        "cron": {"hour": "13"},
         "deps": ["requests"],
         "code": f"import requests\nprint('requests')",
     },
@@ -50,12 +50,33 @@ class TestApp:
         logger.root_logger.info("Connected to DB")
 
         state = State()
-        state.store = Store([str(i) for i in range(0, 24)])
+        state.store = Store()
         logger.root_logger.info("Created in-memory store")
         logger.root_logger.info(state.store)
 
         state.deps = get_deps()
         logger.pip_logger.info("Indexed deps: %s", state.deps)
+
+    def test_cronify(self):
+        def check(_jobs):
+            for job_1 in _jobs:
+                for job_2 in _jobs:
+                    if job_1["cron"] == job_2["cron"]:
+                        assert cronify(job_1["cron"]) == cronify(job_2["cron"])
+                    else:
+                        assert cronify(job_1["cron"]) != cronify(job_2["cron"])
+
+        rows = []
+        for job in jobs:
+            rows.append(Job(**job))
+
+        Job.objects.insert(rows)
+
+        check(jobs)
+        check(rows)
+
+        for job in rows:
+            job.delete()
 
     def test_add_jobs(self):
         rows = add_jobs(jobs)
@@ -68,7 +89,7 @@ class TestApp:
     def test_fetch_store(self):
         state = State()
         logger = Logger()
-        hour = jobs[2]["hour"]
+        cron = jobs[2]["cron"]
         dep = jobs[2]["deps"][0]
         code = jobs[2]["code"]
 
@@ -87,7 +108,7 @@ class TestApp:
         )
 
         logger.pip_logger.info(
-            f"Before fetch_store: code present in #{hour} bucket = {any([code == code_obj.src for code_obj in state.store[hour]])}"
+            f"Before fetch_store: code present in #{cronify(cron)} bucket = {any([code == code_obj.src for code_obj in state.store[cronify(cron)]])}"
         )
 
         fetch_store(state, logger)
@@ -101,12 +122,12 @@ class TestApp:
         )
 
         logger.pip_logger.info(
-            f"After fetch_store: code present in #{hour} bucket = {any([code == code_obj.src for code_obj in state.store[hour]])}"
+            f"After fetch_store: code present in #{cronify(cron)} bucket = {any([code == code_obj.src for code_obj in state.store[cronify(cron)]])}"
         )
 
         job.delete()
         assert dep in state.deps
-        assert any([code == code_obj.src for code_obj in state.store[hour]])
+        assert any([code == code_obj.src for code_obj in state.store[cronify(cron)]])
 
     def test_run_jobs_of_nth_hour(self):
         state = State()
@@ -120,51 +141,18 @@ class TestApp:
 
         fetch_store(state, logger)
 
-        hours = set([job["hour"] for job in jobs])
+        cron_bucket = set([cronify(job["cron"]) for job in jobs])
         out = {}
 
-        for hour in hours:
-            out.update(run_jobs_of_nth_hour(hour, state))
+        for bucket in cron_bucket:
+            for code_obj in state.store[bucket]:
+                out.update(CodeJob(code_obj, logger)())
 
         num_jobs = len(out)
-
-        code_logs = {
-            f"----job::{k}----\n{v}\n-------------------------------------\n"
-            for k, v in out.items()
-        }
-        code_logs = "\n".join(code_logs)
-
-        logger.code_logger.info(
-            "Ran the jobs[%s] that were scheduled in the #11 and #12 hour bucket, outputs:\n\n%s",
-            str(num_jobs),
-            code_logs,
-        )
 
         # assert for correct output
         for job in rows:
             assert out[str(job.id)] == job.deps[0] + "\n"
-            job.delete()
-
-    def test_execute_jobs(self):
-        state = State()
-        logger = Logger()
-
-        rows = []
-        jobs[-1]["hour"] = str(datetime.datetime.now().hour)
-
-        for job in jobs:
-            rows.append(Job(**job))
-
-        Job.objects.insert(rows)
-        job_id_last = str(rows[-1].id)
-
-        fetch_store(state, logger)
-        out = execute_jobs(state, logger)  # execute jobs in the current hour bucket
-
-        assert job_id_last in out
-        assert out[job_id_last] == rows[-1].deps[0] + "\n"
-
-        for job in rows:
             job.delete()
 
 
