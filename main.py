@@ -52,7 +52,7 @@ state = State()
 logger = Logger()
 
 FETCH_HOUR = os.environ.get("FETCH_CRON_HOUR", "*")
-FETCH_MINUTE = os.environ.get("FETCH_CRON_MINUTE", "15")
+FETCH_MINUTE = os.environ.get("FETCH_CRON_MINUTE", "*/15")
 
 
 @scheduler.scheduled_job(
